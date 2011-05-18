@@ -187,6 +187,12 @@ public class MediaAppWidgetProvider extends AppWidgetProvider {
                     0 /* no requestCode */, intent, 0 /* no flags */);
             views.setOnClickPendingIntent(R.id.album_appwidget, pendingIntent);
         }
+
+	intent = new Intent(MediaPlaybackService.PREVIOUS_ACTION);
+	intent.setComponent(serviceName);
+	pendingIntent = PendingIntent.getService(context,
+		0 /* no requestCode */, intent, 0 /* no flags */);
+	views.setOnClickPendingIntent(R.id.control_prev, pendingIntent);
         
         intent = new Intent(MediaPlaybackService.TOGGLEPAUSE_ACTION);
         intent.setComponent(serviceName);

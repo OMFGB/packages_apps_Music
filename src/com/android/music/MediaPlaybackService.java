@@ -93,6 +93,8 @@ public class MediaPlaybackService extends Service {
     public static final String PAUSE_ACTION = "com.android.music.musicservicecommand.pause";
     public static final String PREVIOUS_ACTION = "com.android.music.musicservicecommand.previous";
     public static final String NEXT_ACTION = "com.android.music.musicservicecommand.next";
+    private static final String PLAYSTATUS_REQUEST = "com.android.music.playstatusrequest";
+    private static final String PLAYSTATUS_RESPONSE = "com.android.music.playstatusresponse";
 
     private static final int TRACK_ENDED = 1;
     private static final int RELEASE_WAKELOCK = 2;
@@ -132,6 +134,7 @@ public class MediaPlaybackService extends Service {
     private final static int PODCASTCOLIDX = 8;
     private final static int BOOKMARKCOLIDX = 9;
     private BroadcastReceiver mUnmountReceiver = null;
+    private BroadcastReceiver mA2dpReceiver = null;
     private WakeLock mWakeLock;
     private int mServiceStartId = -1;
     private boolean mServiceInUse = false;
@@ -298,6 +301,7 @@ public class MediaPlaybackService extends Service {
         mCardId = MusicUtils.getCardId(this);
         
         registerExternalStorageListener();
+        registerA2dpServiceListener();
 
         // Needs to be done in this thread, since otherwise ApplicationContext.getPowerManager() crashes.
         mPlayer = new MultiPlayer();
@@ -311,6 +315,7 @@ public class MediaPlaybackService extends Service {
         commandFilter.addAction(PAUSE_ACTION);
         commandFilter.addAction(NEXT_ACTION);
         commandFilter.addAction(PREVIOUS_ACTION);
+        commandFilter.addAction(PLAYSTATUS_REQUEST);
         registerReceiver(mIntentReceiver, commandFilter);
         
         PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
@@ -349,6 +354,7 @@ public class MediaPlaybackService extends Service {
         }
 
         unregisterReceiver(mIntentReceiver);
+        unregisterReceiver(mA2dpReceiver);
         if (mUnmountReceiver != null) {
             unregisterReceiver(mUnmountReceiver);
             mUnmountReceiver = null;
@@ -626,6 +632,8 @@ public class MediaPlaybackService extends Service {
                 pause();
                 mPausedByTransientLossOfFocus = false;
                 seek(0);
+            } else if (PLAYSTATUS_REQUEST.equals(action)) {
+                notifyChange(PLAYSTATUS_RESPONSE);
             }
         }
         
@@ -725,6 +733,21 @@ public class MediaPlaybackService extends Service {
         }
     }
 
+    public void registerA2dpServiceListener() {
+        mA2dpReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String action = intent.getAction();
+                if (action.equals(PLAYSTATUS_REQUEST)) {
+                    notifyChange(PLAYSTATUS_RESPONSE);
+                }
+            }
+        };
+        IntentFilter iFilter = new IntentFilter();
+        iFilter.addAction(PLAYSTATUS_REQUEST);
+        registerReceiver(mA2dpReceiver, iFilter);
+    }
+
     /**
      * Notify the change-receivers that something has changed.
      * The intent that is sent contains the following data
@@ -752,9 +775,15 @@ public class MediaPlaybackService extends Service {
         i.putExtra("album",getAlbumName());
         i.putExtra("track", getTrackName());
         i.putExtra("playing", isPlaying());
-	i.putExtra("songid", getAudioId());
-        i.putExtra("albumid", getAlbumId());        
-	sendStickyBroadcast(i);
+        i.putExtra("songid", getAudioId());
+        i.putExtra("albumid", getAlbumId());
+        i.putExtra("duration", duration());
+        i.putExtra("position", position());
+        if (mPlayList != null)
+            i.putExtra("ListSize", Long.valueOf(mPlayList.length));
+        else
+            i.putExtra("ListSize", Long.valueOf(mPlayListLen));
+        sendStickyBroadcast(i);
         
         if (what.equals(QUEUE_CHANGED)) {
             saveQueue(true);
